@@ -7,14 +7,15 @@ import http.server
 import socketserver
 from pathlib import Path
 from urllib.parse import urlparse
-from src.modules.file_search import FileSearchManager
+from backend.modules.file_search import FileSearchManager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("FileSearch.GUIServer")
 
 PORT = 8520  # Dedicated port for AION GUI
-GUI_DIR = Path(__file__).parent / "gui-react" / "dist"
+GUI_DIR = Path(__file__).parent / "frontend" / "dist"
+
 
 
 class FileSearchHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):

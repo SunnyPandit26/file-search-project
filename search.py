@@ -1,6 +1,6 @@
 import sys
 import logging
-from src.modules.file_search import FileSearchManager
+from backend.modules.file_search import FileSearchManager
 
 # Keep console output clean
 logging.basicConfig(level=logging.WARNING)
