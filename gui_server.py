@@ -5,6 +5,8 @@ import logging
 import webbrowser
 import http.server
 import socketserver
+import ctypes
+import time
 from pathlib import Path
 from urllib.parse import urlparse
 from backend.modules.file_search import FileSearchManager
@@ -102,6 +104,50 @@ class FileSearchHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             self.end_headers()
             self.wfile.write(json.dumps(result).encode("utf-8"))
+            return
+
+        elif parsed_path.path == "/api/gesture":
+            content_length = int(self.headers.get('Content-Length', 0))
+            post_data = self.rfile.read(content_length).decode('utf-8')
+            try:
+                data = json.loads(post_data)
+                action = data.get("action", "")
+                logger.info(f"Executing gesture action: {action}")
+                
+                if action == "swipe_right":
+                    ctypes.windll.user32.keybd_event(0x12, 0, 0, 0) # Alt down
+                    ctypes.windll.user32.keybd_event(0x09, 0, 0, 0) # Tab down
+                    time.sleep(0.02)
+                    ctypes.windll.user32.keybd_event(0x09, 0, 2, 0) # Tab up
+                    ctypes.windll.user32.keybd_event(0x12, 0, 2, 0) # Alt up
+                elif action == "swipe_left":
+                    ctypes.windll.user32.keybd_event(0x12, 0, 0, 0) # Alt down
+                    ctypes.windll.user32.keybd_event(0x10, 0, 0, 0) # Shift down
+                    ctypes.windll.user32.keybd_event(0x09, 0, 0, 0) # Tab down
+                    time.sleep(0.02)
+                    ctypes.windll.user32.keybd_event(0x09, 0, 2, 0) # Tab up
+                    ctypes.windll.user32.keybd_event(0x10, 0, 2, 0) # Shift up
+                    ctypes.windll.user32.keybd_event(0x12, 0, 2, 0) # Alt up
+                elif action == "scroll_up":
+                    # Press Up Arrow multiple times or Page Up to scroll up
+                    ctypes.windll.user32.keybd_event(0x21, 0, 0, 0) # Page Up down
+                    time.sleep(0.02)
+                    ctypes.windll.user32.keybd_event(0x21, 0, 2, 0) # Page Up up
+                elif action == "scroll_down":
+                    # Press Down Arrow or Page Down to scroll down
+                    ctypes.windll.user32.keybd_event(0x22, 0, 0, 0) # Page Down down
+                    time.sleep(0.02)
+                    ctypes.windll.user32.keybd_event(0x22, 0, 2, 0) # Page Down up
+                    
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "ok"}).encode("utf-8"))
+            except Exception as e:
+                logger.error(f"Gesture error: {e}")
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode("utf-8"))
             return
 
         self.send_response(404)

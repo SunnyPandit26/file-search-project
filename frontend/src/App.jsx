@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import GestureController from './GestureController';
 
 // API Base URL (served from same host or relative path)
 const API_URL = '';
@@ -703,6 +704,9 @@ export default function App() {
           </button>
         </form>
       </footer>
+      
+      {/* Gesture Control Module */}
+      <GestureController />
     </div>
   );
 }
