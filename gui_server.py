@@ -138,6 +138,24 @@ class FileSearchHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                     ctypes.windll.user32.keybd_event(0x22, 0, 0, 0) # Page Down down
                     time.sleep(0.02)
                     ctypes.windll.user32.keybd_event(0x22, 0, 2, 0) # Page Down up
+                elif action == "zoom_in":
+                    # Press Ctrl + + multiple times for huge impact
+                    ctypes.windll.user32.keybd_event(0x11, 0, 0, 0) # Ctrl down
+                    for _ in range(4):
+                        ctypes.windll.user32.keybd_event(0xBB, 0, 0, 0) # + down
+                        time.sleep(0.01)
+                        ctypes.windll.user32.keybd_event(0xBB, 0, 2, 0) # + up
+                        time.sleep(0.01)
+                    ctypes.windll.user32.keybd_event(0x11, 0, 2, 0) # Ctrl up
+                elif action == "zoom_out":
+                    # Press Ctrl + - multiple times for huge impact
+                    ctypes.windll.user32.keybd_event(0x11, 0, 0, 0) # Ctrl down
+                    for _ in range(4):
+                        ctypes.windll.user32.keybd_event(0xBD, 0, 0, 0) # - down
+                        time.sleep(0.01)
+                        ctypes.windll.user32.keybd_event(0xBD, 0, 2, 0) # - up
+                        time.sleep(0.01)
+                    ctypes.windll.user32.keybd_event(0x11, 0, 2, 0) # Ctrl up
                     
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")

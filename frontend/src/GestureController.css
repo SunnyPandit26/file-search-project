@@ -67,3 +67,22 @@
 .gesture-help p {
   margin: 2px 0;
 }
+
+.lock-status {
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin-bottom: 4px;
+  font-weight: bold;
+}
+
+.lock-status.locked {
+  background: rgba(231, 76, 60, 0.3);
+  color: #ff7675;
+  border: 1px solid rgba(231, 76, 60, 0.5);
+}
+
+.lock-status.unlocked {
+  background: rgba(46, 204, 113, 0.3);
+  color: #55efc4;
+  border: 1px solid rgba(46, 204, 113, 0.5);
+}

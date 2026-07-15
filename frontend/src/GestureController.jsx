@@ -7,9 +7,12 @@ export default function GestureController() {
   const canvasRef = useRef(null);
   const [isWebcamActive, setIsWebcamActive] = useState(false);
   const [gestureRecognizer, setGestureRecognizer] = useState(null);
+  const [isLocked, setIsLocked] = useState(false);
   
+  const isLockedRef = useRef(false);
   const lastVideoTime = useRef(-1);
   const lastActionTime = useRef(0);
+  const lastZoomRecord = useRef({ action: null, time: 0 }); // Track last zoom for auto-correction
   const handHistory = useRef([]);
   const workerRef = useRef(null);
 
@@ -39,8 +42,14 @@ export default function GestureController() {
 
   const sendGestureCommand = async (action) => {
     const now = Date.now();
-    // Throttle commands to 1 second to prevent accidental double-swipes
-    if (now - lastActionTime.current < 1000) return;
+    
+    // Dynamic throttling for different gestures
+    let throttleTime = 1000;
+    if (action.startsWith("swipe")) throttleTime = 1000; // Hard delay to avoid multiple tab switches
+    else if (action.startsWith("scroll")) throttleTime = 300; // Medium delay for smooth scrolling
+    else if (action.startsWith("zoom")) throttleTime = 200;// 200ms cooldown to allow safe transition to Thumb Up lock
+
+    if (now - lastActionTime.current < throttleTime) return;
     lastActionTime.current = now;
     
     console.log("Gesture Detected:", action);
@@ -84,31 +93,79 @@ export default function GestureController() {
           // Gesture Logic
           const categoryName = results.gestures.length > 0 ? results.gestures[0][0].categoryName : "None";
           const wrist = results.landmarks[0][0]; 
+          const thumbTip = results.landmarks[0][4];
+          const indexTip = results.landmarks[0][8]; 
+          const indexPip = results.landmarks[0][6];
           const now = Date.now();
           
-          handHistory.current.push({ x: wrist.x, y: wrist.y, time: now });
+          // Calculate pinch distance
+          const pinchDist = Math.sqrt(Math.pow(indexTip.x - thumbTip.x, 2) + Math.pow(indexTip.y - thumbTip.y, 2));
+          
+          handHistory.current.push({ 
+            wristX: wrist.x, 
+            indexY: indexTip.y, 
+            pinchDist: pinchDist,
+            time: now 
+          });
           handHistory.current = handHistory.current.filter(h => now - h.time < 500); // 500ms window
           
-          if (handHistory.current.length > 5) {
+          // Lock / Unlock Logic
+          if (categoryName === "Thumb_Up" && !isLockedRef.current) {
+            isLockedRef.current = true;
+            setIsLocked(true);
+            console.log("Gestures Locked");
+            
+            // AUTO-CORRECT: If a zoom happened just before locking (during transition), reverse it!
+            if (now - lastZoomRecord.current.time < 500 && lastZoomRecord.current.action) {
+              console.log("Auto-correcting accidental transition zoom:", lastZoomRecord.current.action);
+              if (lastZoomRecord.current.action === "zoom_in") sendGestureCommand("zoom_out");
+              else if (lastZoomRecord.current.action === "zoom_out") sendGestureCommand("zoom_in");
+            }
+            
+            handHistory.current = []; // Clear history to prevent jumping
+          } else if (categoryName === "Open_Palm" && isLockedRef.current) {
+            isLockedRef.current = false;
+            setIsLocked(false);
+            console.log("Gestures Unlocked");
+            handHistory.current = [];
+          }
+
+          if (handHistory.current.length > 4 && !isLockedRef.current) {
             const first = handHistory.current[0];
             const last = handHistory.current[handHistory.current.length - 1];
-            const dx = last.x - first.x;
-            const dy = last.y - first.y;
             
-            // Using 0.15 threshold for movement
-            if (categoryName === "Open_Palm") {
-              if (dx < -0.15) {
+            const dx = last.wristX - first.wristX;
+            const dy = last.indexY - first.indexY;
+            const dPinch = last.pinchDist - first.pinchDist;
+            
+            // 1. Pinch to Zoom
+            if (last.pinchDist < 0.3) { // Increased evaluate distance
+              if (dPinch > 0.015) { // Ultra sensitive pinch distance
+                sendGestureCommand("zoom_in");
+                lastZoomRecord.current = { action: "zoom_in", time: now };
+                handHistory.current = [];
+              } else if (dPinch < -0.015) {
+                sendGestureCommand("zoom_out");
+                lastZoomRecord.current = { action: "zoom_out", time: now };
+                handHistory.current = [];
+              }
+            }
+            // 2. Open Palm Swipe
+            else if (categoryName === "Open_Palm") {
+              if (dx < -0.12) {
                 sendGestureCommand("swipe_right");
                 handHistory.current = [];
-              } else if (dx > 0.15) {
+              } else if (dx > 0.12) {
                 sendGestureCommand("swipe_left");
                 handHistory.current = [];
               }
-            } else if (categoryName === "Pointing_Up") {
-              if (dy < -0.15) {
+            } 
+            // 3. One Finger Scroll (Fallback to raw landmarks if category is None due to screen edge)
+            else if (categoryName === "Pointing_Up" || (categoryName === "None" && indexTip.y < indexPip.y)) {
+              if (dy < -0.08) {
                 sendGestureCommand("scroll_up");
                 handHistory.current = [];
-              } else if (dy > 0.15) {
+              } else if (dy > 0.08) {
                 sendGestureCommand("scroll_down");
                 handHistory.current = [];
               }
@@ -213,8 +270,12 @@ export default function GestureController() {
           style={{ position: 'absolute', top: 0, left: 0, transform: 'scaleX(-1)' }}
         ></canvas>
         <div className="gesture-help">
-          <p>✋ Open Palm + Swipe Left/Right = Switch Window</p>
-          <p>☝️ Pointing Up + Swipe Up/Down = Scroll</p>
+          <div className={`lock-status ${isLocked ? 'locked' : 'unlocked'}`}>
+            {isLocked ? "🔒 Gestures Paused (Thumb Up)" : "🔓 Gestures Active (Open Palm to unlock)"}
+          </div>
+          <p>✋ Open Palm + Swipe L/R = Switch Window</p>
+          <p>☝️ Pointing Up + Swipe U/D = Scroll</p>
+          <p>🤏 Pinch In/Out = Zoom</p>
         </div>
       </div>
     </div>
