@@ -5,12 +5,12 @@ import tempfile
 import shutil
 import time
 
-from src.modules.file_search.config import FileSearchConfig
-from src.modules.file_search.matcher import FileMatcher
-from src.modules.file_search.indexer import FileIndexer
-from src.modules.file_search.search_engine import SearchEngine
-from src.modules.file_search.intent_handler import FileSearchIntentHandler, InteractionState
-from src.modules.file_search.file_opener import FileOpener
+from backend.modules.file_search.config import FileSearchConfig
+from backend.modules.file_search.matcher import FileMatcher
+from backend.modules.file_search.indexer import FileIndexer
+from backend.modules.file_search.search_engine import SearchEngine
+from backend.modules.file_search.intent_handler import FileSearchIntentHandler, InteractionState
+from backend.modules.file_search.file_opener import FileOpener
 
 class TestFileSearchConfig(unittest.TestCase):
     def test_default_config(self):
@@ -108,7 +108,7 @@ class TestSearchEngine(unittest.TestCase):
 
     @patch.object(FileIndexer, 'get_all_files')
     def test_search_ranking(self, mock_get_all_files):
-        from src.modules.file_search.indexer import IndexedFile
+        from backend.modules.file_search.indexer import IndexedFile
         curr = time.time()
         mock_get_all_files.return_value = [
             IndexedFile("/path/to/Resume.pdf", "Resume.pdf", "pdf", curr - 5*86400, 100),
@@ -129,9 +129,35 @@ class TestIntentHandler(unittest.TestCase):
         self.assertTrue(self.handler.is_file_search_intent("Open resume"))
         self.assertTrue(self.handler.is_file_search_intent("Find my resume"))
         self.assertTrue(self.handler.is_file_search_intent("Search Python notes"))
+        self.assertTrue(self.handler.is_file_search_intent("send resume to sunny on whatsapp"))
+        self.assertTrue(self.handler.is_file_search_intent("whatsapp papa the tax bill"))
         self.assertFalse(self.handler.is_file_search_intent("What is the weather today?"))
 
-    @patch("src.modules.file_search.intent_handler.FileOpener.open_file")
+        # Test parsing
+        query, recipient = self.handler.parse_whatsapp_send("send my resume to jasleen")
+        self.assertEqual(query, "resume")
+        self.assertEqual(recipient, "jasleen")
+
+    @patch("backend.modules.file_search.intent_handler.subprocess.run")
+    @patch("backend.modules.file_search.intent_handler.webbrowser.open")
+    def test_whatsapp_send_flow(self, mock_web_open, mock_sub_run):
+        import os
+        self.engine.search.return_value = [
+            {"path": "/path/to/Resume.pdf", "filename": "Resume.pdf", "extension": "pdf", "modified_time": 0.0, "size": 10}
+        ]
+        # First command initiates the flow and since it's a single match, immediately sends it
+        resp = self.handler.handle_command("send resume to sunny on whatsapp")
+        self.assertIn("copied it to your clipboard", resp)
+        self.assertIn("sunny", resp)
+        
+        abs_path = os.path.abspath("/path/to/Resume.pdf")
+        self.assertTrue(mock_sub_run.call_count >= 2)
+        mock_sub_run.assert_any_call(
+            ["powershell.exe", "-Command", f"Set-Clipboard -LiteralPath '{abs_path}'"], check=True
+        )
+        mock_web_open.assert_called_once_with("https://web.whatsapp.com/")
+
+    @patch("backend.modules.file_search.intent_handler.FileOpener.open_file")
     def test_handle_command_single_match(self, mock_open):
         self.engine.search.return_value = [
             {"path": "/path/to/Resume.pdf", "filename": "Resume.pdf", "extension": "pdf", "modified_time": 0.0, "size": 10}
@@ -153,7 +179,7 @@ class TestIntentHandler(unittest.TestCase):
         self.assertEqual(self.handler.state, InteractionState.AWAITING_SELECTION)
         self.assertEqual(len(self.handler.pending_candidates), 2)
 
-    @patch("src.modules.file_search.intent_handler.FileOpener.open_file")
+    @patch("backend.modules.file_search.intent_handler.FileOpener.open_file")
     def test_selection_flow(self, mock_open):
         self.handler.state = InteractionState.AWAITING_SELECTION
         self.handler.pending_candidates = [
