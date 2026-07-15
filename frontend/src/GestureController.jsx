@@ -96,15 +96,18 @@ export default function GestureController() {
           const thumbTip = results.landmarks[0][4];
           const indexTip = results.landmarks[0][8]; 
           const indexPip = results.landmarks[0][6];
+          const indexMcp = results.landmarks[0][5];
           const now = Date.now();
           
-          // Calculate pinch distance
+          // Calculate pinch distance and hand size for scale-invariant pinch detection
           const pinchDist = Math.sqrt(Math.pow(indexTip.x - thumbTip.x, 2) + Math.pow(indexTip.y - thumbTip.y, 2));
+          const handSize = Math.sqrt(Math.pow(wrist.x - indexMcp.x, 2) + Math.pow(wrist.y - indexMcp.y, 2));
           
           handHistory.current.push({ 
             wristX: wrist.x, 
             indexY: indexTip.y, 
             pinchDist: pinchDist,
+            handSize: handSize,
             time: now 
           });
           handHistory.current = handHistory.current.filter(h => now - h.time < 500); // 500ms window
@@ -139,7 +142,9 @@ export default function GestureController() {
             const dPinch = last.pinchDist - first.pinchDist;
             
             // Determine if the user is in a pinch stance
-            const isPinching = categoryName !== "Open_Palm" && categoryName !== "Pointing_Up" && last.pinchDist < 0.25;
+            // A true pinch has thumb and index close together relative to the hand's overall size
+            // This prevents false pinches when the palm is open but far from the camera
+            const isPinching = categoryName !== "Open_Palm" && categoryName !== "Pointing_Up" && (last.pinchDist < last.handSize * 1.5);
 
             // 1. Open Palm Swipe (Prioritize explicit categories to prevent accidental zooms)
             if (categoryName === "Open_Palm") {
