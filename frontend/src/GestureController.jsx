@@ -138,20 +138,11 @@ export default function GestureController() {
             const dy = last.indexY - first.indexY;
             const dPinch = last.pinchDist - first.pinchDist;
             
-            // 1. Pinch to Zoom
-            if (last.pinchDist < 0.3) { // Increased evaluate distance
-              if (dPinch > 0.015) { // Ultra sensitive pinch distance
-                sendGestureCommand("zoom_in");
-                lastZoomRecord.current = { action: "zoom_in", time: now };
-                handHistory.current = [];
-              } else if (dPinch < -0.015) {
-                sendGestureCommand("zoom_out");
-                lastZoomRecord.current = { action: "zoom_out", time: now };
-                handHistory.current = [];
-              }
-            }
-            // 2. Open Palm Swipe
-            else if (categoryName === "Open_Palm") {
+            // Determine if the user is in a pinch stance
+            const isPinching = categoryName !== "Open_Palm" && categoryName !== "Pointing_Up" && last.pinchDist < 0.25;
+
+            // 1. Open Palm Swipe (Prioritize explicit categories to prevent accidental zooms)
+            if (categoryName === "Open_Palm") {
               if (dx < -0.12) {
                 sendGestureCommand("swipe_right");
                 handHistory.current = [];
@@ -160,13 +151,25 @@ export default function GestureController() {
                 handHistory.current = [];
               }
             } 
-            // 3. One Finger Scroll (Fallback to raw landmarks if category is None due to screen edge)
-            else if (categoryName === "Pointing_Up" || (categoryName === "None" && indexTip.y < indexPip.y)) {
+            // 2. One Finger Scroll
+            else if (categoryName === "Pointing_Up" || (categoryName === "None" && indexTip.y < indexPip.y && !isPinching)) {
               if (dy < -0.08) {
                 sendGestureCommand("scroll_up");
                 handHistory.current = [];
               } else if (dy > 0.08) {
                 sendGestureCommand("scroll_down");
+                handHistory.current = [];
+              }
+            }
+            // 3. Pinch to Zoom
+            else if (isPinching) {
+              if (dPinch > 0.015) { // Ultra sensitive pinch distance
+                sendGestureCommand("zoom_in");
+                lastZoomRecord.current = { action: "zoom_in", time: now };
+                handHistory.current = [];
+              } else if (dPinch < -0.015) {
+                sendGestureCommand("zoom_out");
+                lastZoomRecord.current = { action: "zoom_out", time: now };
                 handHistory.current = [];
               }
             }
