@@ -156,6 +156,28 @@ class FileSearchHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                         ctypes.windll.user32.keybd_event(0xBD, 0, 2, 0) # - up
                         time.sleep(0.01)
                     ctypes.windll.user32.keybd_event(0x11, 0, 2, 0) # Ctrl up
+                elif action == "volume_mute":
+                    # Volume Mute (0xAD)
+                    ctypes.windll.user32.keybd_event(0xAD, 0, 0, 0)
+                    ctypes.windll.user32.keybd_event(0xAD, 0, 2, 0)
+                elif action == "volume_up":
+                    # Volume Up (0xAF), loop 8 times for fast adjustment
+                    for _ in range(8):
+                        ctypes.windll.user32.keybd_event(0xAF, 0, 0, 0)
+                        ctypes.windll.user32.keybd_event(0xAF, 0, 2, 0)
+                elif action == "volume_down":
+                    # Volume Down (0xAE), loop 8 times for fast adjustment
+                    for _ in range(8):
+                        ctypes.windll.user32.keybd_event(0xAE, 0, 0, 0)
+                        ctypes.windll.user32.keybd_event(0xAE, 0, 2, 0)
+                elif action == "browser_back":
+                    # Browser Back (0xA6)
+                    ctypes.windll.user32.keybd_event(0xA6, 0, 0, 0)
+                    ctypes.windll.user32.keybd_event(0xA6, 0, 2, 0)
+                elif action == "browser_forward":
+                    # Browser Forward (0xA7)
+                    ctypes.windll.user32.keybd_event(0xA7, 0, 0, 0)
+                    ctypes.windll.user32.keybd_event(0xA7, 0, 2, 0)
                     
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")

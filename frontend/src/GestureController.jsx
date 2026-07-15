@@ -12,7 +12,6 @@ export default function GestureController() {
   const isLockedRef = useRef(false);
   const lastVideoTime = useRef(-1);
   const lastActionTime = useRef(0);
-  const lastZoomRecord = useRef({ action: null, time: 0 }); // Track last zoom for auto-correction
   const handHistory = useRef([]);
   const workerRef = useRef(null);
 
@@ -47,7 +46,9 @@ export default function GestureController() {
     let throttleTime = 1000;
     if (action.startsWith("swipe")) throttleTime = 1000; // Hard delay to avoid multiple tab switches
     else if (action.startsWith("scroll")) throttleTime = 300; // Medium delay for smooth scrolling
-    else if (action.startsWith("zoom")) throttleTime = 200;// 200ms cooldown to allow safe transition to Thumb Up lock
+    else if (action.startsWith("volume_mute")) throttleTime = 1500; // Delay so it doesn't toggle repeatedly
+    else if (action.startsWith("volume")) throttleTime = 50; // Ultra fast continuous volume
+    else if (action.startsWith("browser")) throttleTime = 1000; // 1 second to avoid double navigation
 
     if (now - lastActionTime.current < throttleTime) return;
     lastActionTime.current = now;
@@ -97,6 +98,8 @@ export default function GestureController() {
           const indexTip = results.landmarks[0][8]; 
           const indexPip = results.landmarks[0][6];
           const indexMcp = results.landmarks[0][5];
+          const middleTip = results.landmarks[0][12];
+          const middlePip = results.landmarks[0][10];
           const now = Date.now();
           
           // Calculate pinch distance and hand size for scale-invariant pinch detection
@@ -108,6 +111,7 @@ export default function GestureController() {
             indexY: indexTip.y, 
             pinchDist: pinchDist,
             handSize: handSize,
+            middleExtended: middleTip.y < middlePip.y,
             time: now 
           });
           handHistory.current = handHistory.current.filter(h => now - h.time < 500); // 500ms window
@@ -117,14 +121,6 @@ export default function GestureController() {
             isLockedRef.current = true;
             setIsLocked(true);
             console.log("Gestures Locked");
-            
-            // AUTO-CORRECT: If a zoom happened just before locking (during transition), reverse it!
-            if (now - lastZoomRecord.current.time < 500 && lastZoomRecord.current.action) {
-              console.log("Auto-correcting accidental transition zoom:", lastZoomRecord.current.action);
-              if (lastZoomRecord.current.action === "zoom_in") sendGestureCommand("zoom_out");
-              else if (lastZoomRecord.current.action === "zoom_out") sendGestureCommand("zoom_in");
-            }
-            
             handHistory.current = []; // Clear history to prevent jumping
           } else if (categoryName === "Open_Palm" && isLockedRef.current) {
             isLockedRef.current = false;
@@ -139,14 +135,8 @@ export default function GestureController() {
             
             const dx = last.wristX - first.wristX;
             const dy = last.indexY - first.indexY;
-            const dPinch = last.pinchDist - first.pinchDist;
-            
-            // Determine if the user is in a pinch stance
-            // A true pinch has thumb and index close together relative to the hand's overall size
-            // This prevents false pinches when the palm is open but far from the camera
-            const isPinching = categoryName !== "Open_Palm" && categoryName !== "Pointing_Up" && (last.pinchDist < last.handSize * 1.5);
 
-            // 1. Open Palm Swipe (Prioritize explicit categories to prevent accidental zooms)
+            // 1. Open Palm Swipe (Switch Window)
             if (categoryName === "Open_Palm") {
               if (dx < -0.12) {
                 sendGestureCommand("swipe_right");
@@ -156,27 +146,37 @@ export default function GestureController() {
                 handHistory.current = [];
               }
             } 
-            // 2. One Finger Scroll
-            else if (categoryName === "Pointing_Up" || (categoryName === "None" && indexTip.y < indexPip.y && !isPinching)) {
+            // 2. One Finger Scroll & Browser Back/Forward
+            // Fallback: If Category is None, but Index is extended AND Middle is closed, it's 1-finger point
+            else if (categoryName === "Pointing_Up" || (categoryName === "None" && indexTip.y < indexPip.y && !last.middleExtended)) {
               if (dy < -0.08) {
                 sendGestureCommand("scroll_up");
                 handHistory.current = [];
               } else if (dy > 0.08) {
                 sendGestureCommand("scroll_down");
                 handHistory.current = [];
+              } else if (dx < -0.15) { // Swiping Right (in mirrored mode dx < 0 is rightward movement)
+                sendGestureCommand("browser_back");
+                handHistory.current = [];
+              } else if (dx > 0.15) { // Swiping Left
+                sendGestureCommand("browser_forward");
+                handHistory.current = [];
               }
             }
-            // 3. Pinch to Zoom
-            else if (isPinching) {
-              if (dPinch > 0.015) { // Ultra sensitive pinch distance
-                sendGestureCommand("zoom_in");
-                lastZoomRecord.current = { action: "zoom_in", time: now };
+            // 3. Victory (Volume Control)
+            else if (categoryName === "Victory") {
+              if (dy < -0.05) {
+                sendGestureCommand("volume_up");
                 handHistory.current = [];
-              } else if (dPinch < -0.015) {
-                sendGestureCommand("zoom_out");
-                lastZoomRecord.current = { action: "zoom_out", time: now };
+              } else if (dy > 0.05) {
+                sendGestureCommand("volume_down");
                 handHistory.current = [];
               }
+            }
+            // 4. Closed Fist (Mute)
+            else if (categoryName === "Closed_Fist") {
+              sendGestureCommand("volume_mute");
+              handHistory.current = [];
             }
           }
         } else {
@@ -281,9 +281,9 @@ export default function GestureController() {
           <div className={`lock-status ${isLocked ? 'locked' : 'unlocked'}`}>
             {isLocked ? "🔒 Gestures Paused (Thumb Up)" : "🔓 Gestures Active (Open Palm to unlock)"}
           </div>
-          <p>✋ Open Palm + Swipe L/R = Switch Window</p>
-          <p>☝️ Pointing Up + Swipe U/D = Scroll</p>
-          <p>🤏 Pinch In/Out = Zoom</p>
+          <p>✋ Palm L/R = Window | ✊ Fist = Mute</p>
+          <p>☝️ 1-Finger U/D = Scroll | L/R = Back/Fwd</p>
+          <p>✌️ 2-Fingers U/D = Volume</p>
         </div>
       </div>
     </div>
