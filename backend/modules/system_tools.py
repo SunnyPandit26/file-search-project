@@ -78,7 +78,10 @@ def create_code_file(filename: str, content: str, folder_path: str = "") -> str:
         folder_path: The absolute path to the folder. If empty, saves to the user's Desktop.
     """
     try:
-        if not folder_path:
+        # Validate folder_path — Ollama sometimes hallucinates fake paths
+        # like "C:\Users\username\Desktop". If the path doesn't exist or
+        # contains generic placeholders, fall back to the real Desktop.
+        if not folder_path or not Path(folder_path).exists():
             folder_path = get_desktop_path()
             
         folder = Path(folder_path)
@@ -124,13 +127,19 @@ def open_application(app_name: str) -> str:
     """
     try:
         logger.info(f"Executing open_application for: {app_name}")
+        # Sanitize app_name to prevent command injection
+        import re
+        sanitized_app = re.sub(r'[^a-zA-Z0-9_\-\.]', '', app_name)
+        if not sanitized_app:
+            return "Failed to launch application. Invalid name format."
+            
         # Try running it via powershell Start-Process
-        subprocess.Popen(["powershell.exe", "-Command", f"Start-Process {app_name}"], shell=True)
-        return f"I have launched {app_name}."
+        subprocess.Popen(["powershell.exe", "-Command", f"Start-Process {sanitized_app}"], shell=True)
+        return f"I have launched {sanitized_app}."
     except Exception as e:
         return f"Failed to launch {app_name}. Error: {e}"
 
-# Export the list of tools to pass to Gemini
+# Export the list of tools to pass to Gemini (automatic function calling)
 aion_tools = [
     play_youtube_video,
     google_search,
@@ -138,4 +147,128 @@ aion_tools = [
     create_code_file,
     open_vscode,
     open_application
+]
+
+# Map of function name -> callable for Ollama tool execution
+aion_tool_map = {
+    "play_youtube_video": play_youtube_video,
+    "google_search": google_search,
+    "open_website": open_website,
+    "create_code_file": create_code_file,
+    "open_vscode": open_vscode,
+    "open_application": open_application,
+}
+
+# Ollama-compatible tool definitions (JSON Schema format)
+ollama_tool_definitions = [
+    {
+        "type": "function",
+        "function": {
+            "name": "play_youtube_video",
+            "description": "Searches for a video on YouTube and opens it in the default browser. Use this when the user wants to play a song, watch a video, or search YouTube.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The name of the video, song, or topic to search for."
+                    }
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "google_search",
+            "description": "Performs a Google search in the default web browser.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The search term or question."
+                    }
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "open_website",
+            "description": "Opens a specific URL or website in the default web browser.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "The website URL (e.g., 'github.com', 'https://chat.openai.com')."
+                    }
+                },
+                "required": ["url"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_code_file",
+            "description": "Creates a new file with the specified code or text content. Use this when the user asks you to write code, create a script, or make a text file.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "filename": {
+                        "type": "string",
+                        "description": "The name of the file (e.g., 'script.py', 'index.html')."
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "The full code or text content to write into the file."
+                    },
+                    "folder_path": {
+                        "type": "string",
+                        "description": "The absolute path to the folder. If empty, saves to the user's Desktop."
+                    }
+                },
+                "required": ["filename", "content"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "open_vscode",
+            "description": "Opens Visual Studio Code.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "folder_path": {
+                        "type": "string",
+                        "description": "The absolute path to the folder to open in VS Code. If empty, opens VS Code on the Desktop."
+                    }
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "open_application",
+            "description": "Attempts to open a standard Windows application by its common executable name. Use this when the user says 'Open Notepad', 'Open Calculator', etc.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "app_name": {
+                        "type": "string",
+                        "description": "The name of the application (e.g., 'notepad', 'calc', 'mspaint', 'explorer')."
+                    }
+                },
+                "required": ["app_name"]
+            }
+        }
+    }
 ]
