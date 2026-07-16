@@ -3,6 +3,7 @@ import logging
 import google.generativeai as genai
 from typing import Optional
 from dotenv import load_dotenv
+from .system_tools import aion_tools
 
 logger = logging.getLogger("AION.Brain")
 
@@ -20,9 +21,10 @@ class AIONBrain:
                 # Use Gemini 2.5 Flash for fast conversational responses
                 self.model = genai.GenerativeModel(
                     'gemini-2.5-flash',
-                    system_instruction="You are AION, a highly intelligent, sarcastic, and helpful AI voice assistant living on the user's Windows computer. Keep your answers concise, human-like, and conversational."
+                    tools=aion_tools,
+                    system_instruction="You are AION, a highly intelligent, sarcastic, and helpful AI voice assistant living on the user's Windows computer. Keep your answers concise, human-like, and conversational. Use the provided tools autonomously whenever the user asks you to perform a system task."
                 )
-                self.chat_session = self.model.start_chat(history=[])
+                self.chat_session = self.model.start_chat(history=[], enable_automatic_function_calling=True)
                 logger.info("AION Brain initialized successfully with Gemini API.")
             except Exception as e:
                 logger.error(f"Failed to initialize Gemini API: {e}")
@@ -48,6 +50,9 @@ class AIONBrain:
                 return response.text
             except Exception as e:
                 logger.error(f"Gemini API error: {e}")
+                error_msg = str(e)
+                if "RECITATION" in error_msg:
+                    return "Sorry, the AI blocked my response because the generated code looked too much like copyrighted material (Recitation Filter). Please try asking for a different script!"
                 return "I'm having trouble connecting to my AI brain right now."
         else:
             # Fallback if no API key
