@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently --kill-others \"python ../gui_server.py --no-browser\" \"vite\"",
+    "dev": "concurrently --kill-others \"py ../gui_server.py --no-browser\" \"vite\"",
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview"

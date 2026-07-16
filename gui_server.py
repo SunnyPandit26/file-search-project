@@ -10,6 +10,8 @@ import time
 from pathlib import Path
 from urllib.parse import urlparse
 from backend.modules.file_search import FileSearchManager
+from backend.modules.aion_brain import AIONBrain
+from backend.modules.aion_brain import AIONBrain
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -21,8 +23,9 @@ GUI_DIR = Path(__file__).parent / "frontend" / "dist"
 
 
 class FileSearchHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
-    def __init__(self, *args, directory=None, manager=None, **kwargs):
+    def __init__(self, *args, directory=None, manager=None, brain=None, **kwargs):
         self.manager = manager
+        self.brain = brain
         # Serve from the static gui/ directory
         super().__init__(*args, directory=str(GUI_DIR), **kwargs)
 
@@ -81,10 +84,10 @@ class FileSearchHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
 
             logger.info(f"Received GUI command: '{command_text}'")
             
-            # Route and execute search/selection/fallback
-            response_text = self.manager.handle_command(command_text)
+            # Route command through AION Brain
+            response_text = self.brain.process_command(command_text)
             
-            # Retrieve updated state and candidates
+            # Retrieve updated state and candidates (for UI rendering if it was a file search)
             state_name = self.manager.intent_handler.state.name
             candidates = self.manager.intent_handler.pending_candidates
             
@@ -214,9 +217,13 @@ def run_server():
         logger.error(f"GUI folder does not exist at {GUI_DIR}. Please make sure you created the index.html, style.css, and app.js inside it.")
         sys.exit(1)
 
-    # Factory to inject the manager dependency into our custom HTTP handler
+    # Initialize AION Brain
+    logger.info("Initializing AION Brain with Gemini AI...")
+    brain = AIONBrain(manager)
+
+    # Factory to inject the manager and brain dependency into our custom HTTP handler
     def handler_factory(*args, **kwargs):
-        return FileSearchHTTPRequestHandler(*args, manager=manager, **kwargs)
+        return FileSearchHTTPRequestHandler(*args, manager=manager, brain=brain, **kwargs)
 
     # Use socketserver to set up a reuseable TCP server
     socketserver.TCPServer.allow_reuse_address = True
