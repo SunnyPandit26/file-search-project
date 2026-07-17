@@ -406,6 +406,8 @@ if ($activated) {{
     
     # Send
     $wshell.SendKeys("{{ENTER}}")
+    Start-Sleep -Milliseconds 1200
+    $wshell.SendKeys("{{ENTER}}")
     Write-Host "Keystrokes sent successfully."
 }} else {{
     Write-Host "Error: Could not find or activate window with title containing 'WhatsApp'."
@@ -487,6 +489,8 @@ if ($activated) {{
     Start-Sleep -Milliseconds 2000
     
     # Send
+    $wshell.SendKeys("{{ENTER}}")
+    Start-Sleep -Milliseconds 1200
     $wshell.SendKeys("{{ENTER}}")
     Write-Host "Keystrokes sent successfully."
 }} else {{
