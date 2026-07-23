@@ -11,7 +11,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 from backend.modules.file_search import FileSearchManager
 from backend.modules.aion_brain import AIONBrain
-from backend.modules.aion_brain import AIONBrain
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
